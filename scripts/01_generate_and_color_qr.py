@@ -13,7 +13,7 @@ def create_qr_with_color(data, output_filename, box_size=10, border=4, fill_colo
         # 誤り訂正レベルを最も高い「H」に設定してみましょう
         qr = qrcode.QRCode(
             version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            error_correction=qrcode.constants.ERROR_CORRECT_H, # type: ignore
             box_size=box_size,
             border=border,
         )
