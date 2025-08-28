@@ -1,4 +1,5 @@
-.venv
+.venv/
 docs/memo.md
+src/pixcelqr/__pycache__/
 
 *png
