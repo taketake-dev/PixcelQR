@@ -90,7 +90,7 @@ class Application(tk.Frame):
         else:
             self.master.title("PixcelQR Generator - [UNREADABLE!]")
 
-def main():
+def main(): 
     root = tk.Tk()
     app = Application(master=root)
     app.mainloop()
