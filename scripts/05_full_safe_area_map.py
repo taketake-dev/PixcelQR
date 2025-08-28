@@ -59,6 +59,7 @@ def get_qr_version(matrix):
 def get_safe_area_map(matrix):
     size = len(matrix)
     version = get_qr_version(matrix)
+    print(f"QRコードのバージョン: {version}")
     mask = [[0] * size for _ in range(size)]
 
     # ファインダーパターンとセパレータ
