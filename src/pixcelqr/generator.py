@@ -4,7 +4,7 @@ import qrcode
 from PIL import Image
 from pyzbar.pyzbar import decode
 
-# QRコードのバージョン1から40までの、完全なアライメントパターン中心座標データ
+# (ALIGNMENT_PATTERN_COORDS の長いリストは前回と同じなので、ここでは省略します)
 ALIGNMENT_PATTERN_COORDS = {
     1: [], 2: [6, 18], 3: [6, 22], 4: [6, 26], 5: [6, 30], 6: [6, 34], 7: [6, 22, 38],
     8: [6, 24, 42], 9: [6, 26, 46], 10: [6, 28, 50], 11: [6, 30, 54], 12: [6, 32, 58],
@@ -25,6 +25,13 @@ class QArtGenerator:
     def __init__(self, data, error_correction=qrcode.constants.ERROR_CORRECT_H):
         self.data = data
         self.error_correction = error_correction
+        self._generate()
+
+    def update_data(self, new_data):
+        """
+        新しいデータでQRコードの内部情報を再生成するメソッド
+        """
+        self.data = new_data
         self._generate()
 
     def _generate(self):
@@ -66,13 +73,6 @@ class QArtGenerator:
                         for c in range(-2, 3):
                             mask[y_center + r][x_center + c] = 2
         return mask
-
-    def modify_dot(self, row, col, is_black):
-        if 0 <= row < self.size and 0 <= col < self.size:
-            if self.safe_area_map[row][col] == 0:
-                self.matrix[row][col] = is_black
-                return True
-        return False
 
     def flip_dot(self, row, col):
         if 0 <= row < self.size and 0 <= col < self.size:
