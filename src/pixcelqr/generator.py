@@ -1,10 +1,10 @@
 # src/pixcelqr/generator.py
 
 import qrcode
-from PIL import Image
+from PIL import Image, ImageColor
 from pyzbar.pyzbar import decode
 
-# (ALIGNMENT_PATTERN_COORDS の長いリストは前回と同じなので、ここでは省略します)
+# (ALIGNMENT_PATTERN_COORDS のリストは変更ないので省略します)
 ALIGNMENT_PATTERN_COORDS = {
     1: [], 2: [6, 18], 3: [6, 22], 4: [6, 26], 5: [6, 30], 6: [6, 34], 7: [6, 22, 38],
     8: [6, 24, 42], 9: [6, 26, 46], 10: [6, 28, 50], 11: [6, 30, 54], 12: [6, 32, 58],
@@ -28,9 +28,6 @@ class QArtGenerator:
         self._generate()
 
     def update_data(self, new_data):
-        """
-        新しいデータでQRコードの内部情報を再生成するメソッド
-        """
         self.data = new_data
         self._generate()
 
@@ -39,28 +36,28 @@ class QArtGenerator:
         qr.add_data(self.data)
         qr.make(fit=True)
         
-        self.matrix = qr.modules
+        self.base_matrix = qr.modules
+        self.color_matrix = self._create_initial_color_matrix()
+        
         self.version = qr.version
         self.size = qr.modules_count
         self.safe_area_map = self._create_safe_area_map()
 
+    def _create_initial_color_matrix(self):
+        return [['black' if dot else 'white' for dot in row] for row in self.base_matrix]
+
     def _create_safe_area_map(self):
+        # (このメソッドの中身は変更ありません)
         mask = [[0] * self.size for _ in range(self.size)]
-        
-        # ファインダーパターンとセパレータ
         for y_start in (0, self.size - 8):
             for x_start in (0, self.size - 8):
                 if y_start > 0 and x_start > 0: continue
                 for r in range(8):
                     for c in range(8):
                         mask[y_start + r][x_start + c] = 4 if r == 7 or c == 7 else 1
-        
-        # タイミングパターン
         for i in range(8, self.size - 8):
             mask[6][i] = 3
             mask[i][6] = 3
-
-        # アライメントパターン
         if self.version > 1 and self.version in ALIGNMENT_PATTERN_COORDS:
             coords = ALIGNMENT_PATTERN_COORDS[self.version]
             for y_center in coords:
@@ -74,30 +71,51 @@ class QArtGenerator:
                             mask[y_center + r][x_center + c] = 2
         return mask
 
-    def flip_dot(self, row, col):
+    def paint_dot(self, row, col, color_str):
         if 0 <= row < self.size and 0 <= col < self.size:
             if self.safe_area_map[row][col] == 0:
-                self.matrix[row][col] = not self.matrix[row][col]
+                self.color_matrix[row][col] = color_str
                 return True
         return False
 
-    def generate_image(self, box_size=10, border=4):
+    def erase_dot(self, row, col):
+        if 0 <= row < self.size and 0 <= col < self.size:
+            if self.safe_area_map[row][col] == 0:
+                original_is_black = self.base_matrix[row][col]
+                self.color_matrix[row][col] = 'black' if original_is_black else 'white'
+                return True
+        return False
+
+    def generate_image(self, box_size=10, border=4, back_color="white"):
         image_size = (self.size + border * 2) * box_size
-        img = Image.new("L", (image_size, image_size), "white")
+        img = Image.new("RGB", (image_size, image_size), back_color)
         draw_context = img.load()
 
-        for r, row_data in enumerate(self.matrix):
-            for c, is_black in enumerate(row_data):
-                if is_black:
+        for r, row_data in enumerate(self.color_matrix):
+            for c, color_str in enumerate(row_data):
+                if color_str != 'white':
+                    rgb_color = ImageColor.getrgb(color_str)
                     x_start = (c + border) * box_size
                     y_start = (r + border) * box_size
                     for i in range(box_size):
                         for j in range(box_size):
-                            draw_context[x_start + i, y_start + j] = 0
+                            draw_context[x_start + i, y_start + j] = rgb_color
         return img
 
     def is_readable(self):
-        img = self.generate_image()
+        border = 4
+        box_size = 1
+        image_size = (self.size + border * 2) * box_size
+        img = Image.new("L", (image_size, image_size), 255)
+        draw_context = img.load()
+
+        for r, row_data in enumerate(self.color_matrix):
+            for c, color_str in enumerate(row_data):
+                if color_str != 'white':
+                    x_start = (c + border) * box_size
+                    y_start = (r + border) * box_size
+                    draw_context[x_start, y_start] = 0
+        
         decoded = decode(img)
         if decoded:
             return decoded[0].data.decode("utf-8") == self.data
