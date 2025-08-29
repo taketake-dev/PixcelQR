@@ -9,8 +9,7 @@ class Application(tk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
         self.master = master
-        # アプリケーションのタイトルをここで一度だけ設定します
-        self.master.title("PixcelQR Generator")
+        self.master.title("PixcelQR")
 
         self.box_size = 15
         self.border = 4
@@ -55,7 +54,10 @@ class Application(tk.Frame):
         image_height = (self.qart.size + self.border * 2) * self.box_size
         self.canvas = tk.Canvas(self.master, width=image_width, height=image_height, bg="white")
         self.canvas.pack(side=tk.TOP, padx=10, pady=10)
-        self.canvas.bind("<Button-1>", self.on_canvas_click)
+
+        # ここでイベント監視を設定します
+        self.canvas.bind("<Button-1>", self.handle_draw_event) # クリックした瞬間のイベント
+        self.canvas.bind("<B1-Motion>", self.handle_draw_event) # クリックしたまま動かした時のイベント
 
     def update_canvas(self):
         new_width = (self.qart.size + self.border * 2) * self.box_size
@@ -69,7 +71,8 @@ class Application(tk.Frame):
         self.canvas.create_image(0, 0, anchor=tk.NW, image=self.qr_image_tk)
         self.check_readability()
 
-    def on_canvas_click(self, event):
+    # on_canvas_clickから、より実態に合った名前に変更しました
+    def handle_draw_event(self, event):
         border_pixels = self.border * self.box_size
         col = (event.x - border_pixels) // self.box_size
         row = (event.y - border_pixels) // self.box_size
@@ -102,7 +105,6 @@ class Application(tk.Frame):
             print(f"Image saved to {filepath}")
 
     def check_readability(self):
-        # タイトルを変更する部分を削除し、ラベルの更新だけを行うようにしました
         is_ok = self.qart.is_readable()
         if is_ok:
             self.readability_status_label.config(text="✓ Readable", fg="green")
