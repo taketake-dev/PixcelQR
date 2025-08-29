@@ -9,7 +9,8 @@ class Application(tk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
         self.master = master
-        self.master.title("PixcelQR")
+        # タイトルを元に戻しました
+        self.master.title("PixcelQR Generator")
 
         self.box_size = 15
         self.border = 4
@@ -47,6 +48,12 @@ class Application(tk.Frame):
         self.readability_status_label = tk.Label(control_frame, text="", font=("Helvetica", 10, "bold"))
         self.readability_status_label.pack(side=tk.LEFT, padx=10)
 
+        # Undo/Redoボタンをここに追加します
+        self.undo_button = tk.Button(control_frame, text="Undo", command=self.undo_action)
+        self.undo_button.pack(side=tk.LEFT, padx=(10, 2))
+        self.redo_button = tk.Button(control_frame, text="Redo", command=self.redo_action)
+        self.redo_button.pack(side=tk.LEFT)
+
         self.save_button = tk.Button(control_frame, text="Save Image", command=self.save_image)
         self.save_button.pack(side=tk.RIGHT)
 
@@ -55,9 +62,13 @@ class Application(tk.Frame):
         self.canvas = tk.Canvas(self.master, width=image_width, height=image_height, bg="white")
         self.canvas.pack(side=tk.TOP, padx=10, pady=10)
 
-        # ここでイベント監視を設定します
-        self.canvas.bind("<Button-1>", self.handle_draw_event) # クリックした瞬間のイベント
-        self.canvas.bind("<B1-Motion>", self.handle_draw_event) # クリックしたまま動かした時のイベント
+        self.canvas.bind("<Button-1>", self.start_drawing)
+        self.canvas.bind("<B1-Motion>", self.draw_on_motion)
+
+        # キーボードショートカットにShift+Ctrl+Zを追加します
+        self.master.bind("<Control-z>", self.undo_action)
+        self.master.bind("<Control-y>", self.redo_action)
+        self.master.bind("<Control-Shift-Z>", self.redo_action) # 大文字のZでShiftを表現します
 
     def update_canvas(self):
         new_width = (self.qart.size + self.border * 2) * self.box_size
@@ -71,8 +82,11 @@ class Application(tk.Frame):
         self.canvas.create_image(0, 0, anchor=tk.NW, image=self.qr_image_tk)
         self.check_readability()
 
-    # on_canvas_clickから、より実態に合った名前に変更しました
-    def handle_draw_event(self, event):
+    def start_drawing(self, event):
+        self.qart.record_history()
+        self.draw_on_motion(event)
+
+    def draw_on_motion(self, event):
         border_pixels = self.border * self.box_size
         col = (event.x - border_pixels) // self.box_size
         row = (event.y - border_pixels) // self.box_size
@@ -86,6 +100,14 @@ class Application(tk.Frame):
             success = False
         
         if success:
+            self.update_canvas()
+
+    def undo_action(self, event=None):
+        if self.qart.undo():
+            self.update_canvas()
+
+    def redo_action(self, event=None):
+        if self.qart.redo():
             self.update_canvas()
 
     def generate_qr(self):

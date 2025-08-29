@@ -1,10 +1,11 @@
 # src/pixcelqr/generator.py
 
 import qrcode
-from PIL import Image, ImageColor
+import copy
+# ここに ImageDraw を追加します
+from PIL import Image, ImageColor, ImageDraw
 from pyzbar.pyzbar import decode
 
-# (ALIGNMENT_PATTERN_COORDS のリストは変更ないので省略します)
 ALIGNMENT_PATTERN_COORDS = {
     1: [], 2: [6, 18], 3: [6, 22], 4: [6, 26], 5: [6, 30], 6: [6, 34], 7: [6, 22, 38],
     8: [6, 24, 42], 9: [6, 26, 46], 10: [6, 28, 50], 11: [6, 30, 54], 12: [6, 32, 58],
@@ -25,6 +26,8 @@ class QArtGenerator:
     def __init__(self, data, error_correction=qrcode.constants.ERROR_CORRECT_H):
         self.data = data
         self.error_correction = error_correction
+        self.undo_stack = []
+        self.redo_stack = []
         self._generate()
 
     def update_data(self, new_data):
@@ -42,22 +45,27 @@ class QArtGenerator:
         self.version = qr.version
         self.size = qr.modules_count
         self.safe_area_map = self._create_safe_area_map()
+        
+        self.undo_stack.clear()
+        self.redo_stack.clear()
 
     def _create_initial_color_matrix(self):
         return [['black' if dot else 'white' for dot in row] for row in self.base_matrix]
 
     def _create_safe_area_map(self):
-        # (このメソッドの中身は変更ありません)
         mask = [[0] * self.size for _ in range(self.size)]
+        
         for y_start in (0, self.size - 8):
             for x_start in (0, self.size - 8):
                 if y_start > 0 and x_start > 0: continue
                 for r in range(8):
                     for c in range(8):
                         mask[y_start + r][x_start + c] = 4 if r == 7 or c == 7 else 1
+        
         for i in range(8, self.size - 8):
             mask[6][i] = 3
             mask[i][6] = 3
+
         if self.version > 1 and self.version in ALIGNMENT_PATTERN_COORDS:
             coords = ALIGNMENT_PATTERN_COORDS[self.version]
             for y_center in coords:
@@ -70,6 +78,24 @@ class QArtGenerator:
                         for c in range(-2, 3):
                             mask[y_center + r][x_center + c] = 2
         return mask
+
+    def record_history(self):
+        self.undo_stack.append(copy.deepcopy(self.color_matrix))
+        self.redo_stack.clear()
+
+    def undo(self):
+        if self.undo_stack:
+            self.redo_stack.append(copy.deepcopy(self.color_matrix))
+            self.color_matrix = self.undo_stack.pop()
+            return True
+        return False
+
+    def redo(self):
+        if self.redo_stack:
+            self.undo_stack.append(copy.deepcopy(self.color_matrix))
+            self.color_matrix = self.redo_stack.pop()
+            return True
+        return False
 
     def paint_dot(self, row, col, color_str):
         if 0 <= row < self.size and 0 <= col < self.size:
@@ -87,7 +113,6 @@ class QArtGenerator:
         return False
 
     def generate_image(self, box_size=10, border=4, back_color="white"):
-        # (このメソッドの中身は変更ありません)
         image_size = (self.size + border * 2) * box_size
         img = Image.new("RGB", (image_size, image_size), back_color)
         draw_context = img.load()
@@ -103,35 +128,25 @@ class QArtGenerator:
                             draw_context[x_start + i, y_start + j] = rgb_color
         return img
 
-    # --- ここからが修正されたメソッドです ---
     def is_readable(self):
-        """
-        現在の状態が読み取り可能かチェックする (信頼性向上版)
-        """
-        # pyzbarが認識しやすいように、ある程度の大きさを持つ白黒画像を生成します
-        check_box_size = 5
-        check_border = 4
-        
-        image_size = (self.size + check_border * 2) * check_box_size
-        img = Image.new("L", (image_size, image_size), 255) # "L"はグレースケール, 255は白
-        draw_context = img.load()
+        border = 4
+        box_size = 3
+        image_size = (self.size + border * 2) * box_size
+        img = Image.new("L", (image_size, image_size), 255)
+        # ここで Image.Draw ではなく ImageDraw.Draw を使います
+        draw = ImageDraw.Draw(img)
 
-        # color_matrixを元に、'white'以外の色をすべて黒として描画します
         for r, row_data in enumerate(self.color_matrix):
             for c, color_str in enumerate(row_data):
-                if color_str.lower() != 'white':
-                    x_start = (c + check_border) * check_box_size
-                    y_start = (r + check_border) * check_box_size
-                    # 5x5の四角形を黒(0)で塗りつぶします
-                    for i in range(check_box_size):
-                        for j in range(check_box_size):
-                            draw_context[x_start + i, y_start + j] = 0
+                if color_str != 'white':
+                    x_start = (c + border) * box_size
+                    y_start = (r + border) * box_size
+                    draw.rectangle(
+                        (x_start, y_start, x_start + box_size - 1, y_start + box_size - 1),
+                        fill=0
+                    )
         
         decoded = decode(img)
         if decoded:
-            # 読み取れたデータが元のデータと一致するかを返します
             return decoded[0].data.decode("utf-8") == self.data
-        
         return False
-    # --- ここまでが修正されたメソッドです ---
-
