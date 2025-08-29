@@ -87,6 +87,7 @@ class QArtGenerator:
         return False
 
     def generate_image(self, box_size=10, border=4, back_color="white"):
+        # (このメソッドの中身は変更ありません)
         image_size = (self.size + border * 2) * box_size
         img = Image.new("RGB", (image_size, image_size), back_color)
         draw_context = img.load()
@@ -102,21 +103,35 @@ class QArtGenerator:
                             draw_context[x_start + i, y_start + j] = rgb_color
         return img
 
+    # --- ここからが修正されたメソッドです ---
     def is_readable(self):
-        border = 4
-        box_size = 1
-        image_size = (self.size + border * 2) * box_size
-        img = Image.new("L", (image_size, image_size), 255)
+        """
+        現在の状態が読み取り可能かチェックする (信頼性向上版)
+        """
+        # pyzbarが認識しやすいように、ある程度の大きさを持つ白黒画像を生成します
+        check_box_size = 5
+        check_border = 4
+        
+        image_size = (self.size + check_border * 2) * check_box_size
+        img = Image.new("L", (image_size, image_size), 255) # "L"はグレースケール, 255は白
         draw_context = img.load()
 
+        # color_matrixを元に、'white'以外の色をすべて黒として描画します
         for r, row_data in enumerate(self.color_matrix):
             for c, color_str in enumerate(row_data):
-                if color_str != 'white':
-                    x_start = (c + border) * box_size
-                    y_start = (r + border) * box_size
-                    draw_context[x_start, y_start] = 0
+                if color_str.lower() != 'white':
+                    x_start = (c + check_border) * check_box_size
+                    y_start = (r + check_border) * check_box_size
+                    # 5x5の四角形を黒(0)で塗りつぶします
+                    for i in range(check_box_size):
+                        for j in range(check_box_size):
+                            draw_context[x_start + i, y_start + j] = 0
         
         decoded = decode(img)
         if decoded:
+            # 読み取れたデータが元のデータと一致するかを返します
             return decoded[0].data.decode("utf-8") == self.data
+        
         return False
+    # --- ここまでが修正されたメソッドです ---
+

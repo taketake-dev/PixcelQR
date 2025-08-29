@@ -3,6 +3,8 @@
 import tkinter as tk
 from tkinter import filedialog, colorchooser
 from PIL import ImageTk
+# URLを解析するためのライブラリをインポートします
+from urllib.parse import urlparse
 from generator import QArtGenerator
 
 class Application(tk.Frame):
@@ -20,6 +22,8 @@ class Application(tk.Frame):
         self.qart = QArtGenerator(self.initial_data)
         
         self.create_widgets()
+        # 起動時に最初のURLをチェックします
+        self.validate_and_update_status()
         self.update_canvas()
 
     def create_widgets(self):
@@ -30,6 +34,12 @@ class Application(tk.Frame):
         self.data_entry = tk.Entry(control_frame)
         self.data_entry.insert(0, self.initial_data)
         self.data_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+        # 入力があるたびにURL検証関数を呼び出すように設定します
+        self.data_entry.bind("<KeyRelease>", self.validate_and_update_status)
+
+        # URLのステータスを表示するためのラベルを新しく追加します
+        self.url_status_label = tk.Label(control_frame, text="", font=("Helvetica", 10))
+        self.url_status_label.pack(side=tk.LEFT, padx=(0, 10))
 
         self.generate_button = tk.Button(control_frame, text="Generate", command=self.generate_qr)
         self.generate_button.pack(side=tk.LEFT, padx=5)
@@ -54,11 +64,11 @@ class Application(tk.Frame):
         self.canvas.bind("<Button-1>", self.on_canvas_click)
 
     def update_canvas(self):
+        # (このメソッドの中身は変更ありません)
         new_width = (self.qart.size + self.border * 2) * self.box_size
         new_height = (self.qart.size + self.border * 2) * self.box_size
         self.canvas.config(width=new_width, height=new_height)
         
-        # generate_imageからfill_colorの引数をなくします
         self.qr_image_pil = self.qart.generate_image(
             box_size=self.box_size, border=self.border
         )
@@ -67,13 +77,13 @@ class Application(tk.Frame):
         self.check_readability()
 
     def on_canvas_click(self, event):
+        # (このメソッドの中身は変更ありません)
         border_pixels = self.border * self.box_size
         col = (event.x - border_pixels) // self.box_size
         row = (event.y - border_pixels) // self.box_size
         
         mode = self.draw_mode.get()
         if mode == "paint":
-            # 現在選択している色でドットを塗るように変更
             success = self.qart.paint_dot(row, col, self.current_color)
         elif mode == "erase":
             success = self.qart.erase_dot(row, col)
@@ -84,12 +94,15 @@ class Application(tk.Frame):
             self.update_canvas()
 
     def generate_qr(self):
+        # Generateボタンが押されたときも、念のためステータスを更新します
+        self.validate_and_update_status()
         new_data = self.data_entry.get()
         if new_data:
             self.qart.update_data(new_data)
             self.update_canvas()
 
     def save_image(self):
+        # (このメソッドの中身は変更ありません)
         filepath = filedialog.asksaveasfilename(
             defaultextension=".png",
             filetypes=[("PNG files", "*.png"), ("All files", "*.*")],
@@ -100,18 +113,45 @@ class Application(tk.Frame):
             print(f"Image saved to {filepath}")
 
     def check_readability(self):
+        # (このメソッドの中身は変更ありません)
         if self.qart.is_readable():
             self.master.title("PixcelQR Generator - [Readable]")
         else:
             self.master.title("PixcelQR Generator - [UNREADABLE!]")
             
     def choose_color(self):
+        # (このメソッドの中身は変更ありません)
         color_code = colorchooser.askcolor(title="Choose color", initialcolor=self.current_color)
         if color_code and color_code[1]:
             self.current_color = color_code[1]
             self.color_preview.config(bg=self.current_color)
-            # 色を選んだだけでは再描画しないように変更
-            # self.update_canvas()
+
+    # --- ここからが新しく追加されたメソッドです ---
+    def validate_url(self, url_string):
+        """
+        文字列が有効なURL形式かチェックする
+        """
+        try:
+            result = urlparse(url_string)
+            # scheme (httpなど) と netloc (ドメイン名) の両方が存在すればOKとします
+            return all([result.scheme, result.netloc])
+        except ValueError:
+            return False
+
+    def validate_and_update_status(self, event=None):
+        """
+        入力ボックスの文字列を検証し、ステータスラベルを更新する
+        """
+        text = self.data_entry.get()
+        if not text:
+            self.url_status_label.config(text="")
+            return
+
+        if self.validate_url(text):
+            self.url_status_label.config(text="✓ Valid URL", fg="green")
+        else:
+            self.url_status_label.config(text="✗ Not a valid URL", fg="red")
+    # --- ここまで ---
 
 def main():
     root = tk.Tk()
